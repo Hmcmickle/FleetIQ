@@ -64,7 +64,7 @@ def analyze_dataframe(df):
             0
         )
 
-        score = 100
+        score = 70
 
         # Fleet size fit
         if 10 <= power_units <= 50:
