@@ -41,11 +41,20 @@ def analyze_dataframe(df):
         else:
             carrier = "Canal / Cimarron"
 
-        results.append({
-            "Company": row.get('Legal_Name', 'Unknown'),
-            "Score": score,
-            "Carrier": carrier
-        })
+        # Assign Tier based on score
+if score >= 80:
+    tier = "A"
+elif score >= 60:
+    tier = "B"
+else:
+    tier = "C"
+
+results.append({
+    "Company": row.get('Legal_Name', 'Unknown'),
+    "Score": score,
+    "Tier": tier,
+    "Carrier": carrier
+})
 
     return pd.DataFrame(results)
 
