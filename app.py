@@ -202,6 +202,6 @@ with detail_left:
 
 with detail_right:
     st.markdown("#### Customized cold email")
-    email_text = ai_email(selected)
+    email_text = f"Hi {selected.get('Company', 'there')},\n\nWe’d love to help with your trucking insurance needs."
     st.text_area("Email draft", value=email_text, height=320, label_visibility="collapsed")
     st.caption("You can copy, tweak, and send this outreach immediately.")
