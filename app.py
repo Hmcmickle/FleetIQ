@@ -254,22 +254,16 @@ if state_filter:
 if search_term:
     filtered = filtered[filtered["Legal_Name"].astype(str).str.contains(search_term, case=False, na=False)]
 
-display_cols = [
-    "Legal_Name",
-    "Business_State",
-    "Power_Units",
-    "Score",
-    "Tier",
-    "Carrier_Fit",
-    "Close_Probability",
-    "Premium_Estimate",
-]
 st.markdown("### Ranked fleets")
 
 ranked = filtered.sort_values("Score", ascending=False)
 
+ranked = filtered.sort_values("Score", ascending=False)
+
+display_df = ranked[["Company", "Score", "Tier"]]
+
 st.dataframe(
-    ranked,
+    display_df,
     use_container_width=True,
     hide_index=True,
 )
