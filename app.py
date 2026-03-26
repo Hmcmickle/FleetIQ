@@ -10,6 +10,44 @@ def load_cab_file(file):
         return df
     except Exception as e:
         return None
+def analyze_dataframe(df):
+    # Simple scoring + carrier logic
+    results = []
+
+    for _, row in df.iterrows():
+        score = 0
+
+        # Basic scoring (you can improve later)
+        if row.get('Power Units', 0) >= 10:
+            score += 20
+
+        if row.get('Power Units', 0) >= 25:
+            score += 10
+
+        # Fake loss logic placeholder
+        losses = row.get('Losses', 0)
+        if losses == 0:
+            score += 20
+        elif losses <= 2:
+            score += 10
+        else:
+            score -= 20
+
+        # Carrier match
+        if score >= 80:
+            carrier = "Sentry / Northland"
+        elif score >= 60:
+            carrier = "Crum & Forster / Nirvana"
+        else:
+            carrier = "Canal / Cimarron"
+
+        results.append({
+            "Company": row.get('Legal_Name', 'Unknown'),
+            "Score": score,
+            "Carrier": carrier
+        })
+
+    return pd.DataFrame(results)
 
 
 
