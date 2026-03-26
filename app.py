@@ -15,7 +15,7 @@ def analyze_dataframe(df):
 
     southeast_states = {"GA", "FL", "AL", "SC", "NC", "TN", "MS", "LA"}
 
-    def to_num(val, default=0):
+    def to_num(val, default=None):
         try:
             if val is None or val == "":
                 return default
@@ -23,7 +23,7 @@ def analyze_dataframe(df):
         except Exception:
             return default
 
-    def get_first(row, names, default=0):
+    def get_first(row, names, default=None):
         for name in names:
             if name in row.index:
                 return row.get(name, default)
@@ -36,25 +36,22 @@ def analyze_dataframe(df):
         years_in_business = to_num(get_first(row, ["Years In Business", "Years_In_Business"]), 0)
         state = str(get_first(row, ["Business State", "Business_State"], "")).strip().upper()
 
-        # EXACT / visible CAB-style column names from your screenshots
-        unsafe_driving_score = to_num(row.get("Unsafe_Driving_Score", 0), 0)
+        unsafe_driving_score = to_num(row.get("Unsafe_Driving_Score"), None)
         unsafe_driving_alert = str(row.get("Unsafe_Driving_Alert", "")).strip().upper()
 
-        hos_score = to_num(row.get("HOS_Score", 0), 0)
+        hos_score = to_num(row.get("HOS_Score"), None)
         hos_alert = str(row.get("HOS_Alert", "")).strip().upper()
 
-        driver_fitness_score = to_num(row.get("Driver_Fitness_Score", 0), 0)
+        driver_fitness_score = to_num(row.get("Driver_Fitness_Score"), None)
 
-        vehicle_maintenance_score = to_num(row.get("Vehicle_Maintenance_Score", 0), 0)
+        vehicle_maintenance_score = to_num(row.get("Vehicle_Maintenance_Score"), None)
         vehicle_maintenance_alert = str(row.get("Vehicle_Maintenance_Alert", "")).strip().upper()
 
-        hazmat_score = to_num(get_first(row, ["Hazmat_Score", "Hazmat A Score"], 0), 0)
+        hazmat_score = to_num(get_first(row, ["Hazmat_Score", "Hazmat A Score"]), None)
 
-        crash_score = to_num(row.get("Crash_Score", 0), 0)
+        crash_score = to_num(row.get("Crash_Score"), None)
         crash_alert = str(row.get("Crash_Alert", "")).strip().upper()
 
-        # OOS - higher should score WORSE
-        # This checks a few common header versions in case your file uses one of them
         vehicle_oos = to_num(
             get_first(
                 row,
@@ -64,94 +61,105 @@ def analyze_dataframe(df):
             0
         )
 
-        score = 70
+        score = 0
 
-        # Fleet size fit
+        # Fleet size
         if 10 <= power_units <= 50:
-            score += 8
+            score += 25
         elif 6 <= power_units <= 9 or 51 <= power_units <= 75:
-            score += 2
+            score += 15
         else:
-            score -= 8
+            score += 5
 
         # Years in business
         if years_in_business >= 10:
-            score += 8
+            score += 20
         elif years_in_business >= 5:
-            score += 4
-        elif years_in_business < 2:
-            score -= 10
+            score += 12
+        elif years_in_business >= 2:
+            score += 6
+        else:
+            score += 2
 
         # Southeast bonus
         if state in southeast_states:
             score += 5
 
-        # BASIC / CAB scores
-        # Higher BASIC scores should score WORSE
-        score -= unsafe_driving_score * 0.45
-        score -= hos_score * 0.40
-        score -= driver_fitness_score * 0.35
-        score -= vehicle_maintenance_score * 0.45
-        score -= hazmat_score * 0.20
-        score -= crash_score * 0.65
+        # BASIC scores: lower is better
+        basics = [
+            unsafe_driving_score,
+            hos_score,
+            driver_fitness_score,
+            vehicle_maintenance_score,
+            crash_score,
+        ]
+
+        valid_basics = [b for b in basics if b is not None]
+
+        if valid_basics:
+            avg_basic = sum(valid_basics) / len(valid_basics)
+
+            if avg_basic <= 20:
+                score += 30
+            elif avg_basic <= 40:
+                score += 22
+            elif avg_basic <= 60:
+                score += 14
+            elif avg_basic <= 80:
+                score += 6
+            else:
+                score += 0
+        else:
+            avg_basic = None
+            score += 10
 
         # Alerts
         if unsafe_driving_alert == "Y":
-            score -= 8
+            score -= 5
         if hos_alert == "Y":
-            score -= 8
+            score -= 5
         if vehicle_maintenance_alert == "Y":
-            score -= 8
+            score -= 5
         if crash_alert == "Y":
-            score -= 12
-
-        # OOS penalty - higher OOS = WORSE score
-        if vehicle_oos >= 40:
-            score -= 35
-        elif vehicle_oos >= 30:
-            score -= 25
-        elif vehicle_oos >= 20:
-            score -= 15
-        elif vehicle_oos >= 10:
             score -= 8
-        elif vehicle_oos > 0:
-            score -= 3
 
-        # Clamp to 0-100
+        # OOS: higher should score worse
+        if vehicle_oos >= 40:
+            score -= 25
+        elif vehicle_oos >= 30:
+            score -= 18
+        elif vehicle_oos >= 20:
+            score -= 12
+        elif vehicle_oos >= 10:
+            score -= 6
+        elif vehicle_oos > 0:
+            score -= 2
+
+        # Hazmat
+        if hazmat_score is not None:
+            if hazmat_score >= 80:
+                score -= 8
+            elif hazmat_score >= 60:
+                score -= 4
+
         score = max(0, min(100, round(score, 1)))
 
-        # Tier
-        if score >= 85:
+        if score >= 70:
             tier = "A"
-        elif score >= 65:
+        elif score >= 45:
             tier = "B"
         else:
             tier = "C"
 
-        # Carrier fit
-        if score >= 85:
+        if score >= 80:
             carrier = "Sentry / Northland"
-        elif score >= 70:
+        elif score >= 60:
             carrier = "Crum & Forster / Nirvana"
         else:
             carrier = "Canal / Cimarron"
 
         results.append({
             "Company": company,
-            "Power Units": power_units,
-            "Years In Business": years_in_business,
-            "Business State": state,
-            "Unsafe_Driving_Score": unsafe_driving_score,
-            "Unsafe_Driving_Alert": unsafe_driving_alert,
-            "HOS_Score": hos_score,
-            "HOS_Alert": hos_alert,
-            "Driver_Fitness_Score": driver_fitness_score,
-            "Vehicle_Maintenance_Score": vehicle_maintenance_score,
-            "Vehicle_Maintenance_Alert": vehicle_maintenance_alert,
-            "Hazmat_Score": hazmat_score,
-            "Crash_Score": crash_score,
-            "Crash_Alert": crash_alert,
-            "Vehicle OOS %": vehicle_oos,
             "Score": score,
             "Tier": tier,
             "Carrier": carrier
