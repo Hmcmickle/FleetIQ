@@ -160,7 +160,7 @@ display_cols = [
 ]
 st.markdown("### Ranked fleets")
 st.dataframe(
-    filtered[display_cols].sort_values(["Score", "Power_Units"], ascending=[False, False]),
+    filtered.sort_values("Score", ascending=False)
     use_container_width=True,
     hide_index=True,
 )
