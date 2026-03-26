@@ -26,7 +26,6 @@ def metric_card(label: str, value: str, subtext: str = "") -> None:
     )
 
 
-demo_user, demo_password = get_demo_credentials()
 
 with st.sidebar:
     st.markdown("## FleetIQ")
