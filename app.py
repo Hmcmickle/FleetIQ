@@ -11,20 +11,17 @@ def load_cab_file(file):
     except Exception as e:
         return None
 def analyze_dataframe(df):
-    # Simple scoring + carrier logic
     results = []
 
     for _, row in df.iterrows():
         score = 0
 
-        # Basic scoring (you can improve later)
         if row.get('Power Units', 0) >= 10:
             score += 20
 
         if row.get('Power Units', 0) >= 25:
             score += 10
 
-        # Fake loss logic placeholder
         losses = row.get('Losses', 0)
         if losses == 0:
             score += 20
@@ -33,7 +30,13 @@ def analyze_dataframe(df):
         else:
             score -= 20
 
-        # Carrier match
+        if score >= 80:
+            tier = "A"
+        elif score >= 60:
+            tier = "B"
+        else:
+            tier = "C"
+
         if score >= 80:
             carrier = "Sentry / Northland"
         elif score >= 60:
@@ -41,22 +44,14 @@ def analyze_dataframe(df):
         else:
             carrier = "Canal / Cimarron"
 
-        # Assign Tier based on score
-if score >= 80:
-    tier = "A"
-elif score >= 60:
-    tier = "B"
-else:
-    tier = "C"
+        results.append({
+            "Company": row.get('Legal_Name', 'Unknown'),
+            "Score": score,
+            "Tier": tier,
+            "Carrier": carrier
+        })
 
-results.append({
-    "Company": row.get('Legal_Name', 'Unknown'),
-    "Score": score,
-    "Tier": tier,
-    "Carrier": carrier
-})
-
-return pd.DataFrame(results)
+    return pd.DataFrame(results)
 
 
 
