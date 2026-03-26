@@ -121,9 +121,9 @@ def analyze_dataframe(df):
         score = max(0, min(100, round(score, 1)))
 
         # Tier
-        if score >= 80:
+        if score >= 85:
             tier = "A"
-        elif score >= 60:
+        elif score >= 65:
             tier = "B"
         else:
             tier = "C"
