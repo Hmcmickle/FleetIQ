@@ -13,42 +13,157 @@ def load_cab_file(file):
 def analyze_dataframe(df):
     results = []
 
+    southeast_states = {"GA", "FL", "AL", "SC", "NC", "TN", "MS", "LA"}
+
     for _, row in df.iterrows():
         score = 0
 
-        if row.get('Power Units', 0) >= 10:
-            score += 20
+        company = str(row.get("Legal_Name", "Unknown")).strip()
 
-        if row.get('Power Units', 0) >= 25:
+        power_units = row.get("Power Units", 0)
+        years_in_business = row.get("Years In Business", 0)
+        state = str(row.get("Business State", "")).strip().upper()
+
+        # Try to pull common CAB-style fields safely
+        unsafe_pct = row.get("Unsafe Driving BASIC", None)
+        hos_pct = row.get("HOS Compliance BASIC", None)
+        vehicle_pct = row.get("Vehicle Maintenance BASIC", None)
+        driver_pct = row.get("Driver Fitness BASIC", None)
+        crash_pct = row.get("Crash Indicator BASIC", None)
+
+        oos_pct = row.get("Vehicle OOS %", None)
+
+        # Clean numeric values
+        def to_num(val, default=0):
+            try:
+                if val is None or val == "":
+                    return default
+                return float(val)
+            except Exception:
+                return default
+
+        power_units = to_num(power_units, 0)
+        years_in_business = to_num(years_in_business, 0)
+        unsafe_pct = to_num(unsafe_pct, None)
+        hos_pct = to_num(hos_pct, None)
+        vehicle_pct = to_num(vehicle_pct, None)
+        driver_pct = to_num(driver_pct, None)
+        crash_pct = to_num(crash_pct, None)
+        oos_pct = to_num(oos_pct, None)
+
+        # 1) Fleet size (20)
+        if 10 <= power_units <= 50:
+            score += 20
+        elif 6 <= power_units <= 9 or 51 <= power_units <= 75:
             score += 10
 
-        losses = row.get('Losses', 0)
-        if losses == 0:
-            score += 20
-        elif losses <= 2:
+        # 2) Years in business (15)
+        if years_in_business >= 10:
+            score += 15
+        elif years_in_business >= 5:
             score += 10
+        elif years_in_business >= 2:
+            score += 5
+
+        # 3) Southeast bonus (5)
+        if state in southeast_states:
+            score += 5
+
+        # 4) BASIC safety scoring (25)
+        basic_values = [v for v in [unsafe_pct, hos_pct, vehicle_pct, driver_pct, crash_pct] if v is not None]
+        if basic_values:
+            avg_basic = sum(basic_values) / len(basic_values)
+
+            if avg_basic <= 20:
+                score += 25
+            elif avg_basic <= 40:
+                score += 18
+            elif avg_basic <= 60:
+                score += 10
+            elif avg_basic <= 80:
+                score += 2
+            else:
+                score -= 10
         else:
-            score -= 20
+            avg_basic = None
+            score += 5  # limited credit if data is thin
 
-        if score >= 80:
+        # 5) OOS / inspection quality (15)
+        if oos_pct is not None:
+            if oos_pct <= 10:
+                score += 15
+            elif oos_pct <= 20:
+                score += 8
+            elif oos_pct <= 30:
+                score += 2
+            else:
+                score -= 8
+        else:
+            score += 5
+
+        # 6) Carrier appetite fit (10)
+        if score >= 75:
+            appetite_score = 10
+        elif score >= 55:
+            appetite_score = 5
+        else:
+            appetite_score = 0
+        score += appetite_score
+
+        # Clamp score
+        score = max(0, min(100, round(score)))
+
+        # Tier
+        if score >= 75:
             tier = "A"
-        elif score >= 60:
+        elif score >= 55:
             tier = "B"
         else:
             tier = "C"
 
+        # Carrier fit
         if score >= 80:
-            carrier = "Sentry / Northland"
-        elif score >= 60:
-            carrier = "Crum & Forster / Nirvana"
+            carrier = "Sentry Select / Northland"
+        elif score >= 65:
+            carrier = "Northland / Crum & Forster"
+        elif score >= 50:
+            carrier = "Nirvana / Crum & Forster"
         else:
             carrier = "Canal / Cimarron"
 
+        # Basic summary
+        red_flags = []
+        if years_in_business < 3:
+            red_flags.append("Newer operation")
+        if avg_basic is not None and avg_basic > 60:
+            red_flags.append("Elevated BASIC profile")
+        if oos_pct is not None and oos_pct > 20:
+            red_flags.append("Higher OOS %")
+        if power_units < 10 or power_units > 50:
+            red_flags.append("Outside target fleet band")
+
+        if not red_flags:
+            red_flags_text = "None"
+        else:
+            red_flags_text = ", ".join(red_flags)
+
+        if tier == "A":
+            recommended_action = "Prioritize immediately"
+        elif tier == "B":
+            recommended_action = "Review and position carefully"
+        else:
+            recommended_action = "Non-standard review only"
+
         results.append({
-            "Company": row.get('Legal_Name', 'Unknown'),
+            "Company": company,
+            "Power Units": power_units,
+            "Business State": state,
+            "Years In Business": years_in_business,
             "Score": score,
             "Tier": tier,
-            "Carrier": carrier
+            "Carrier": carrier,
+            "Recommended Action": recommended_action,
+            "Red Flags": red_flags_text,
         })
 
     return pd.DataFrame(results)
