@@ -137,7 +137,7 @@ f1, f2, f3 = st.columns([1, 1, 2])
 with f1:
     tier_filter = st.multiselect("Tier", ["A", "B", "C"], default=["A", "B", "C"])
 with f2:
-    states = sorted([s for s in analyzed_df["Business_State"].dropna().astype(str).unique().tolist() if s])
+    states []
     state_filter = st.multiselect("State", states, default=states[:10] if len(states) > 10 else states)
 with f3:
     search_term = st.text_input("Search company", placeholder="Start typing a legal name")
