@@ -170,7 +170,7 @@ st.dataframe(
 
 
 st.markdown("### Lead detail")
-names = filtered["Legal_Name"].astype(str).tolist()
+names = filtered["Company"].astype(str).tolist()
 if not names:
     st.warning("No accounts match your current filters.")
     st.stop()
