@@ -2,6 +2,14 @@ from __future__ import annotations
 
 import pandas as pd
 import streamlit as st
+import pandas as pd
+
+def load_cab_file(file):
+    try:
+        df = pd.read_excel(file)
+        return df
+    except Exception as e:
+        return None
 
 
 
