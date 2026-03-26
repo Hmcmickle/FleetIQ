@@ -129,7 +129,7 @@ with right:
     avg_score = round(float(analyzed_df["Score"].mean()), 1)
     metric_card("Average score", str(avg_score), "Across all uploaded fleets")
 with far_right:
-    target_band= 0.astype(float).between(10, 50))).sum())
+    target_band= 0. astype(float).between(10, 50))).sum())
     metric_card("10–50 unit fleets", f"{target_band:,}", "Inside your preferred size band")
 
 st.markdown("### Filters")
