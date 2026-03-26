@@ -159,8 +159,11 @@ display_cols = [
     "Premium_Estimate",
 ]
 st.markdown("### Ranked fleets")
+
+ranked = filtered.sort_values("Score", ascending=False)
+
 st.dataframe(
-  ranked = filtered.sort_values("Score", ascending=False)
+    ranked,
     use_container_width=True,
     hide_index=True,
 )
