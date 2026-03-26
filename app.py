@@ -176,7 +176,7 @@ if not names:
     st.stop()
 
 selected_name = st.selectbox("Select an account", names)
-selected = filtered[filtered["Legal_Name"].astype(str) == selected_name].iloc[0].to_dict()
+selected = filtered[filtered["Company"].astype(str) == selected_name].iloc[0].to_dict()
 
 detail_left, detail_right = st.columns([1.1, 0.9])
 
