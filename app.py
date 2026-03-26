@@ -3,7 +3,6 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from modules.auth import ensure_login, get_demo_credentials
 from modules.data_utils import analyze_dataframe, dataframe_to_excel_bytes, load_cab_file
 from modules.email_generator import ai_email
 
@@ -29,7 +28,6 @@ def metric_card(label: str, value: str, subtext: str = "") -> None:
     )
 
 
-ensure_login()
 demo_user, demo_password = get_demo_credentials()
 
 with st.sidebar:
