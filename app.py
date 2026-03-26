@@ -168,13 +168,6 @@ st.dataframe(
     hide_index=True,
 )
 
-st.download_button(
-    "Download analyzed workbook",
-    data=dataframe_to_excel_bytes(filtered.sort_values("Score", ascending=False)),
-    file_name="FleetIQ_Analysis.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    use_container_width=True,
-)
 
 st.markdown("### Lead detail")
 names = filtered["Legal_Name"].astype(str).tolist()
