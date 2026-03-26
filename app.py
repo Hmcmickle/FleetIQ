@@ -56,7 +56,7 @@ results.append({
     "Carrier": carrier
 })
 
-    return pd.DataFrame(results)
+return pd.DataFrame(results)
 
 
 
