@@ -43,8 +43,6 @@ with tab2:
     st.markdown(
         f"""
         ### Login details
-        **Username:** `{demo_user}`  
-        **Password:** `{demo_password}`
 
         ### How to use
         1. Upload your CAB export Excel file.
