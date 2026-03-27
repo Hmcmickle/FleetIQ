@@ -1,152 +1,116 @@
-from __future__ import annotations
 
 import pandas as pd
 import streamlit as st
-import pandas as pd
 
-def load_cab_file(file):
+st.set_page_config(page_title="FleetIQ", layout="wide")
+
+REQUIRED_HEADERS = [
+    "Legal_Name",
+    "Email",
+    "Company Rep1",
+    "Years_In_Business",
+    "Power_Units",
+    "Unsafe_Driving_Score",
+    "Unsafe_Driving_Alert",
+    "HOS_Score",
+    "HOS_Alert",
+    "Driver_Fitness_Score",
+    "Driver_Fitness_Alert",
+    "Controlled_Substance_Score",
+    "Controlled_Substance_Alert",
+    "Vehicle_Maintenance_Score",
+    "Vehicle_Maintenance_Alert",
+    "Hazmat_Score",
+    "Hazmat_Alert",
+    "Crash_Score",
+    "Crash_Alert",
+]
+
+def load_file(file) -> pd.DataFrame:
+    df = pd.read_excel(file)
+    df.columns = [str(c).strip() for c in df.columns]
+    return df
+
+def num(value, default: float = 0.0) -> float:
     try:
-        df = pd.read_excel(file)
-        return df
-    except Exception as e:
-        return None
-def analyze_dataframe(df):
-    results = []
-
-    southeast_states = {"GA", "FL", "AL", "SC", "NC", "TN", "MS", "LA"}
-
-    def to_num(val, default=None):
-        try:
-            if val is None or val == "":
-                return default
-            return float(val)
-        except Exception:
+        if pd.isna(value) or str(value).strip() == "":
             return default
-
-    def get_first(row, names, default=None):
-        for name in names:
-            if name in row.index:
-                return row.get(name, default)
+        return float(value)
+    except Exception:
         return default
 
+def txt(value, default: str = "") -> str:
+    try:
+        if pd.isna(value):
+            return default
+        s = str(value).strip()
+        return s if s else default
+    except Exception:
+        return default
+
+def yn_penalty(val: str, penalty: float) -> float:
+    return penalty if txt(val).upper() == "Y" else 0.0
+
+def analyze(df: pd.DataFrame) -> pd.DataFrame:
+    results = []
+
     for _, row in df.iterrows():
-        company = str(row.get("Legal_Name", "Unknown")).strip()
+        company = txt(row.get("Legal_Name"), "Unknown Company")
+        rep = txt(row.get("Company Rep1"))
+        email = txt(row.get("Email"))
+        years = num(row.get("Years_In_Business"), 0)
+        power_units = num(row.get("Power_Units"), 0)
 
-        power_units = to_num(get_first(row, ["Power Units", "Power_Units"]), 0)
-        years_in_business = to_num(get_first(row, ["Years In Business", "Years_In_Business"]), 0)
-        state = str(get_first(row, ["Business State", "Business_State"], "")).strip().upper()
+        unsafe = num(row.get("Unsafe_Driving_Score"), 0)
+        hos = num(row.get("HOS_Score"), 0)
+        driver = num(row.get("Driver_Fitness_Score"), 0)
+        controlled = num(row.get("Controlled_Substance_Score"), 0)
+        vehicle = num(row.get("Vehicle_Maintenance_Score"), 0)
+        hazmat = num(row.get("Hazmat_Score"), 0)
+        crash = num(row.get("Crash_Score"), 0)
 
-        unsafe_driving_score = to_num(row.get("Unsafe_Driving_Score"), None)
-        unsafe_driving_alert = str(row.get("Unsafe_Driving_Alert", "")).strip().upper()
+        # Start from a neutral score so you get a spread of A/B/C.
+        score = 85.0
 
-        hos_score = to_num(row.get("HOS_Score"), None)
-        hos_alert = str(row.get("HOS_Alert", "")).strip().upper()
+        # Lower CAB scores are better.
+        score -= unsafe * 0.35
+        score -= hos * 0.30
+        score -= driver * 0.20
+        score -= controlled * 0.20
+        score -= vehicle * 0.35
+        score -= hazmat * 0.10
+        score -= crash * 0.45
 
-        driver_fitness_score = to_num(row.get("Driver_Fitness_Score"), None)
+        # Alerts worsen the account.
+        score -= yn_penalty(row.get("Unsafe_Driving_Alert"), 6)
+        score -= yn_penalty(row.get("HOS_Alert"), 5)
+        score -= yn_penalty(row.get("Driver_Fitness_Alert"), 4)
+        score -= yn_penalty(row.get("Controlled_Substance_Alert"), 5)
+        score -= yn_penalty(row.get("Vehicle_Maintenance_Alert"), 6)
+        score -= yn_penalty(row.get("Hazmat_Alert"), 3)
+        score -= yn_penalty(row.get("Crash_Alert"), 8)
 
-        vehicle_maintenance_score = to_num(row.get("Vehicle_Maintenance_Score"), None)
-        vehicle_maintenance_alert = str(row.get("Vehicle_Maintenance_Alert", "")).strip().upper()
-
-        hazmat_score = to_num(get_first(row, ["Hazmat_Score", "Hazmat A Score"]), None)
-
-        crash_score = to_num(row.get("Crash_Score"), None)
-        crash_alert = str(row.get("Crash_Alert", "")).strip().upper()
-
-        vehicle_oos = to_num(
-            get_first(
-                row,
-                ["Vehicle OOS %", "Vehicle_OOS_%", "Vehicle_OOS_Pct", "Vehicle OOS Pct"],
-                0
-            ),
-            0
-        )
-
-        score = 0
-
-        # Fleet size
+        # Favor your target size.
         if 10 <= power_units <= 50:
-            score += 25
-        elif 6 <= power_units <= 9 or 51 <= power_units <= 75:
-            score += 15
-        else:
-            score += 5
-
-        # Years in business
-        if years_in_business >= 10:
-            score += 20
-        elif years_in_business >= 5:
-            score += 12
-        elif years_in_business >= 2:
             score += 6
-        else:
+        elif 6 <= power_units <= 75:
             score += 2
-
-        # Southeast bonus
-        if state in southeast_states:
-            score += 5
-
-        # BASIC scores: lower is better
-        basics = [
-            unsafe_driving_score,
-            hos_score,
-            driver_fitness_score,
-            vehicle_maintenance_score,
-            crash_score,
-        ]
-
-        valid_basics = [b for b in basics if b is not None]
-
-        if valid_basics:
-            avg_basic = sum(valid_basics) / len(valid_basics)
-
-            if avg_basic <= 20:
-                score += 30
-            elif avg_basic <= 40:
-                score += 22
-            elif avg_basic <= 60:
-                score += 14
-            elif avg_basic <= 80:
-                score += 6
-            else:
-                score += 0
         else:
-            avg_basic = None
-            score += 10
+            score -= 4
 
-        # Alerts
-        if unsafe_driving_alert == "Y":
+        # Favor established fleets.
+        if years >= 10:
+            score += 4
+        elif years >= 5:
+            score += 2
+        elif years < 2:
             score -= 5
-        if hos_alert == "Y":
-            score -= 5
-        if vehicle_maintenance_alert == "Y":
-            score -= 5
-        if crash_alert == "Y":
-            score -= 8
-
-        # OOS: higher should score worse
-        if vehicle_oos >= 40:
-            score -= 25
-        elif vehicle_oos >= 30:
-            score -= 18
-        elif vehicle_oos >= 20:
-            score -= 12
-        elif vehicle_oos >= 10:
-            score -= 6
-        elif vehicle_oos > 0:
-            score -= 2
-
-        # Hazmat
-        if hazmat_score is not None:
-            if hazmat_score >= 80:
-                score -= 8
-            elif hazmat_score >= 60:
-                score -= 4
 
         score = max(0, min(100, round(score, 1)))
 
-        if score >= 70:
+        if score >= 72:
             tier = "A"
-        elif score >= 45:
+        elif score >= 52:
             tier = "B"
         else:
             tier = "C"
@@ -160,157 +124,136 @@ def analyze_dataframe(df):
 
         results.append({
             "Company": company,
+            "Rep": rep,
+            "Email": email,
+            "Years_In_Business": years,
+            "Power_Units": power_units,
+            "Unsafe_Driving_Score": unsafe,
+            "HOS_Score": hos,
+            "Driver_Fitness_Score": driver,
+            "Controlled_Substance_Score": controlled,
+            "Vehicle_Maintenance_Score": vehicle,
+            "Hazmat_Score": hazmat,
+            "Crash_Score": crash,
             "Score": score,
             "Tier": tier,
-            "Carrier": carrier
+            "Carrier": carrier,
         })
 
     return pd.DataFrame(results)
 
+def split_emails(email_value: str) -> list[str]:
+    if not email_value:
+        return []
+    clean = email_value.replace(",", ";")
+    return [e.strip() for e in clean.split(";") if e.strip()]
 
+def build_email(record: dict) -> tuple[str, str]:
+    rep = txt(record.get("Rep"))
+    company = txt(record.get("Company"), "your company")
+    greeting_name = rep if rep else company
 
-st.set_page_config(
-    page_title="FleetIQ",
-    page_icon="🚛",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+    unsafe = record.get("Unsafe_Driving_Score", 0)
+    hos = record.get("HOS_Score", 0)
+    vehicle = record.get("Vehicle_Maintenance_Score", 0)
+    crash = record.get("Crash_Score", 0)
+    score = record.get("Score", 0)
+    tier = record.get("Tier", "C")
 
+    issues = []
+    if crash >= 60:
+        issues.append(f"Crash Score {crash}")
+    if unsafe >= 60:
+        issues.append(f"Unsafe Driving {unsafe}")
+    if hos >= 60:
+        issues.append(f"HOS {hos}")
+    if vehicle >= 60:
+        issues.append(f"Vehicle Maintenance {vehicle}")
 
-def metric_card(label: str, value: str, subtext: str = "") -> None:
-    st.markdown(
-        f"""
-        <div style="background:white; border:1px solid #E2E8F0; border-radius:18px; padding:1rem 1.1rem; box-shadow:0 8px 22px rgba(15,23,42,0.04);">
-          <div style="font-size:0.86rem; color:#64748B;">{label}</div>
-          <div style="font-size:1.65rem; font-weight:700; color:#0F172A; margin-top:0.15rem;">{value}</div>
-          <div style="font-size:0.82rem; color:#475569; margin-top:0.2rem;">{subtext}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    if issues:
+        issue_line = "The main areas that stood out were " + ", ".join(issues) + "."
+    else:
+        issue_line = "A few safety metrics stood out, and there may be an opportunity to improve how the account is positioned to the market."
 
+    subject = f"Quick question on {company}'s trucking insurance"
 
+    body = f"""Hi {greeting_name},
 
-with st.sidebar:
-    st.markdown("## FleetIQ")
-    st.caption("AI underwriting + prospecting for midsize trucking fleets")
-    if st.button("Log out", use_container_width=True):
-        st.session_state["authenticated"] = False
-        st.rerun()
+I was reviewing {company}'s fleet profile and wanted to reach out.
+
+{issue_line}
+
+Right now the account is coming in at a FleetIQ score of {score} ({tier} tier).
+
+We work with trucking fleets to improve how they’re positioned with carriers and help uncover better options when safety metrics are affecting pricing.
+
+Would you be open to a quick 10-minute conversation this week?
+
+Best,
+Hunter
+"""
+    return subject, body
 
 st.title("FleetIQ")
-st.caption("Light-mode underwriting dashboard for 10–50 truck fleets in the Southeast")
+st.caption("Upload CAB AI Test 2 style files. This version is mapped to your actual spreadsheet headers.")
 
-tab1, tab2 = st.tabs(["Dashboard", "Quick Start"])
+uploaded_file = st.file_uploader("Upload CAB Excel file", type=["xlsx", "xls"])
 
-with tab2:
-    st.markdown(
-        f"""
-        ### Login details
-
-        ### How to use
-        1. Upload your CAB export Excel file.
-        2. Review scored fleets and carrier fit.
-        3. Click a row in the selector to generate a customized cold email.
-        4. Export the analyzed workbook.
-
-        ### AI email note
-        Add an `OPENAI_API_KEY` in a `.env` file to enable AI-generated cold emails.  
-        Without that key, FleetIQ still works and uses a strong fallback email template.
-        """
-    )
-
-uploaded_file = st.file_uploader("Upload CAB Excel file", type=["xlsx"])
-
-if not uploaded_file:
+if uploaded_file is None:
     st.info("Upload your CAB file to begin.")
     st.stop()
 
-try:
-    raw_df = load_cab_file(uploaded_file)
-    analyzed_df = analyze_dataframe(raw_df)
-except Exception as exc:
-    st.error(str(exc))
-    st.stop()
+df = load_file(uploaded_file)
 
-left, middle, right, far_right = st.columns(4)
-with left:
-    metric_card("Accounts loaded", f"{len(analyzed_df):,}", "Rows processed from your CAB file")
-with middle:
-    a_count = int((analyzed_df["Tier"] == "A").sum())
-    metric_card("A-tier fleets", f"{a_count:,}", "Highest priority targets")
-with right:
-    avg_score = round(float(analyzed_df["Score"].mean()), 1)
-    metric_card("Average score", str(avg_score), "Across all uploaded fleets")
-with far_right:
-    target_band= 0
-    metric_card("10–50 unit fleets", f"{target_band:,}", "Inside your preferred size band")
+missing = [h for h in REQUIRED_HEADERS if h not in df.columns]
+with st.expander("Detected columns / header check", expanded=False):
+    st.write(df.columns.tolist())
+    if missing:
+        st.warning(f"Missing headers: {missing}")
+    else:
+        st.success("All expected headers found.")
 
-st.markdown("### Filters")
-f1, f2, f3 = st.columns([1, 1, 2])
-with f1:
-    tier_filter = st.multiselect("Tier", ["A", "B", "C"], default=["A", "B", "C"])
-with f2:
-    states = [ ] 
-    state_filter = st.multiselect("State", states, default=states[:10] if len(states) > 10 else states)
-with f3:
-    search_term = st.text_input("Search company", placeholder="Start typing a legal name")
+analyzed = analyze(df)
+ranked = analyzed.sort_values("Score", ascending=False)
 
-filtered = analyzed_df[analyzed_df["Tier"].isin(tier_filter)].copy()
-if state_filter:
-    filtered = filtered[filtered["Business_State"].astype(str).isin(state_filter)]
-if search_term:
-    filtered = filtered[filtered["Legal_Name"].astype(str).str.contains(search_term, case=False, na=False)]
-
-st.markdown("### Ranked fleets")
-
-ranked = filtered.sort_values("Score", ascending=False)
-
-ranked = filtered.sort_values("Score", ascending=False)
-
-display_df = ranked[["Company", "Score", "Tier"]]
-
+st.subheader("Ranked Fleets")
 st.dataframe(
-    display_df,
+    ranked[["Company", "Score", "Tier"]],
     use_container_width=True,
     hide_index=True,
 )
 
+st.subheader("Lead detail")
+selected_name = st.selectbox("Select account", ranked["Company"].tolist())
+selected = ranked[ranked["Company"] == selected_name].iloc[0].to_dict()
 
-st.markdown("### Lead detail")
-names = filtered["Company"].astype(str).tolist()
-if not names:
-    st.warning("No accounts match your current filters.")
-    st.stop()
+left, right = st.columns(2)
 
-selected_name = st.selectbox("Select an account", names)
-selected = filtered[filtered["Company"].astype(str) == selected_name].iloc[0].to_dict()
+with left:
+    st.write(f"**Company:** {selected['Company']}")
+    st.write(f"**Rep:** {selected['Rep'] if selected['Rep'] else 'Not found'}")
+    st.write(f"**Email:** {selected['Email'] if selected['Email'] else 'Not found'}")
+    st.write(f"**Score:** {selected['Score']}")
+    st.write(f"**Tier:** {selected['Tier']}")
+    st.write(f"**Carrier:** {selected['Carrier']}")
 
-detail_left, detail_right = st.columns([1.1, 0.9])
+    st.markdown("**Key scores**")
+    st.write(f"- Unsafe Driving: {selected['Unsafe_Driving_Score']}")
+    st.write(f"- HOS: {selected['HOS_Score']}")
+    st.write(f"- Driver Fitness: {selected['Driver_Fitness_Score']}")
+    st.write(f"- Controlled Substance: {selected['Controlled_Substance_Score']}")
+    st.write(f"- Vehicle Maintenance: {selected['Vehicle_Maintenance_Score']}")
+    st.write(f"- Hazmat: {selected['Hazmat_Score']}")
+    st.write(f"- Crash: {selected['Crash_Score']}")
 
-with detail_left:
-    st.markdown(
-        f"""
-        <div style="background:white; border:1px solid #E2E8F0; border-radius:20px; padding:1.2rem 1.3rem; box-shadow:0 10px 24px rgba(15,23,42,0.05);">
-          <h3 style="margin:0; color:#0F172A;">{selected.get("Legal_Name","")}</h3>
-          <p style="margin:0.45rem 0 0; color:#475569;">{selected.get("Business_State","")} • {int(float(selected.get("Power_Units",0) or 0))} power units</p>
-          <hr style="border:none; border-top:1px solid #E2E8F0; margin:1rem 0;">
-          <p><strong>Score:</strong> {selected.get("Score")}</p>
-          <p><strong>Tier:</strong> {selected.get("Tier")}</p>
-          <p><strong>Carrier fit:</strong> {selected.get("Carrier_Fit")}</p>
-          <p><strong>Close probability:</strong> {selected.get("Close_Probability")}</p>
-          <p><strong>Premium estimate:</strong> {selected.get("Premium_Estimate")}</p>
-          <p><strong>Recommended action:</strong> {selected.get("Recommended_Action")}</p>
-          <p><strong>Summary:</strong> {selected.get("Summary")}</p>
-          <p><strong>Red flags:</strong> {selected.get("Red_Flags")}</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+with right:
+    st.markdown("### Customized cold email")
+    subject, email_text = build_email(selected)
+    st.text_input("Subject", subject)
+    st.text_area("Email body", email_text, height=320)
 
-with detail_right:
-    st.markdown("#### Customized cold email")
-    email_text = f"Hi {selected.get('Company', 'there')},\n\nWe’d love to help with your trucking insurance needs."
-    st.text_area("Email draft", value=email_text, height=320, label_visibility="collapsed")
-    st.caption("You can copy, tweak, and send this outreach immediately.")
-
+    recipients = split_emails(selected["Email"])
+    if recipients:
+        st.write("**Recipients found:**", ", ".join(recipients))
+    else:
+        st.warning("No email found in the Email column for this account.")
